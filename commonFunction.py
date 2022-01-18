@@ -57,7 +57,7 @@ def ListOfStocks(func, a=[]):
         btn.setStyleSheet("color:green")
         btn.clicked.connect(func)
         itemHbox.addWidget(btn)
-        itemHbox.setObjectName("Hbox")
+        # itemHbox.setObjectName("Hbox")
         listVBox.addLayout(itemHbox)
         listVBox.setSpacing(2)
         listVBox.setObjectName("listvbox")

@@ -86,8 +86,11 @@ class FavoriteWindow(QWidget):
         self.setObjectName("Fav")
         self.main = papa
         self.labels = []
+        self.graphDict = {}
         papa.stackNo.setdefault(self.objectName(),
                                 len(papa.stackNo.keys()) + 1)
+        print(papa.stackNo)
+
         self.addContent()
 
     def addContent(self):
@@ -102,18 +105,22 @@ class FavoriteWindow(QWidget):
         self.favGrap = QGroupBox()
         self.graphStack = QStackedLayout()
         if (self.main.userData.info["Favorites"] != []):
-            graph = drawGraph(
-                getTickerValue(self, self.main.userData.info["Favorites"][0]))
+            firstFav = self.main.userData.info["Favorites"][0]
+            graph = drawGraph(getTickerValue(self, firstFav))
+            # graph = QLabel(firstFav)
+            graph.setObjectName(firstFav)
+            self.graphDict[firstFav] = 0
         else:
             graph = QLabel("Oops Favorite list is empty")
 
         self.graphStack.insertWidget(0, graph)
+
         labelList = [
             "Open", "Market Cap", "Day Highest", "Close", "Dividend",
             "52 Weeks highest"
         ]
         v_box = QVBoxLayout(self.favGrap)
-        v_box.addWidget(self.graphStack)
+        v_box.addLayout(self.graphStack)
         v_box.addLayout(createLabels(self, 6, labelList))
 
         self.favHbox = QHBoxLayout()
@@ -125,6 +132,18 @@ class FavoriteWindow(QWidget):
 
     def btnClick(self, some):
         sender = self.sender()
+
+        if (sender not in self.graphDict):
+            pass
+            #add object by taking following reference
+            # self.graphStack.addWidget(drawGraph(sender.objectName()))
+
+        self.stack.setCurrentIndex(
+            self.graphDict.setdefault(sender.objectName())
+        ) if self.graphStack.currentIndex() != (self.graphDict.setdefault(
+            sender.objectName())) else displayMessage(
+                self, "Stop", "You're Already Opened that graph")
+
         QMessageBox.information(self, "Btn Action",
                                 sender.objectName() + " I got clicked.",
                                 QMessageBox.StandardButton.Ok,
@@ -134,6 +153,7 @@ class FavoriteWindow(QWidget):
         layout = (self.fav11.widget()).layout()
         itemHbox = QHBoxLayout()
         lb1 = QPushButton(text)  #stock Name
+        lb1.setObjectName(text)
         lb1.setFlat(True)
         lb1.clicked.connect(lambda: displayMessage(self, "Hey", text))
         lb2 = QLabel(text="CurPrice")  #current day highest
@@ -147,8 +167,14 @@ class FavoriteWindow(QWidget):
         btn.clicked.connect(self.btnClick)
         itemHbox.addWidget(btn)
         layout.addLayout(itemHbox)
-        self.graph = graph
+        self.graphStack.addWidget(graph)
+        self.graphDict.setdefault(text, len(self.graphDict.keys()))
+        self.graphStack.setCurrentIndex(len(self.graphDict.keys()))
         #alighntment is not proper
+
+    def isExist(self, name):
+        return self.graphDict.setdefault(
+            name) if name in self.graphDict else -1
 
 
 class StockWindow(QWidget):
@@ -179,7 +205,7 @@ class StockWindow(QWidget):
             self.fav.setWordWrap(True)
         else:
             self.fav = ListOfStocks(self.btnClicked,
-                                    self.main.userData.info["MyStock"])
+                                    self.main.userData.info["MyStock"].keys())
 
         v_box.addWidget(self.fav)
 
