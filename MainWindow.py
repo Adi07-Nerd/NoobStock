@@ -9,7 +9,8 @@ class Main_Window(QWidget):
         #################
         #ticker will store dictionary of all tickers
         #tickerModel has representation of tickers for search suggestion
-        #stackNo dictionary will hold index at which perticular QWidget get inserted
+        #stackNo dictionary will hold index at which perticular QWidget get inserted IMPORTANT index is 1 value less because we explicitly
+        #putting home index
         # userData will be used to store user class instance.
         #######
         super().__init__()
@@ -73,7 +74,6 @@ class Main_Window(QWidget):
 
     def homeClicked(self):
         if not self.searchbox.isVisible():
-            print("Im here")
             self.searchbox.show()
         self.colorChangeBtn(self.btnNames[2])
         self.stack.setCurrentIndex(
@@ -176,7 +176,6 @@ class Main_Window(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes)
         if (value == QMessageBox.StandardButton.Yes):
-            print("exiting")
             del self.userData
             self.close()
             # event.accept()

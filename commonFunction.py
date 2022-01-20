@@ -1,3 +1,4 @@
+from unicodedata import name
 from PyQt6.QtWidgets import QGridLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget, QCompleter
 from PyQt6.QtCore import Qt
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -39,14 +40,21 @@ def searchCombo(obj, slayout):
     return vbox
 
 
-def ListOfStocks(func, a=[]):
+def ListOfStocks(detailFunc, showGraph=None, a=[]):
     # main to connnect with the function of the parents and list of the stock.
     scrollarea = QScrollArea()
     scrollw = QWidget()
     listVBox = QVBoxLayout(scrollw)
     for x in a:
+        ##showing bool object has no attribut like split in stockname
         itemHbox = QHBoxLayout()
-        lb1 = QLabel(str(x))  #stock Name
+        if showGraph != None:
+            lb1 = QPushButton(x)  #stock Name
+            lb1.setObjectName(x)
+            lb1.setFlat(True)
+            lb1.clicked.connect(showGraph)
+        else:
+            lb1 = QLabel(x)
         lb2 = QLabel(text="CurPrice")  #current day highest
         lb3 = QLabel(text="compare")  #compare to last day closing
         itemHbox.addWidget(lb1)
@@ -55,7 +63,7 @@ def ListOfStocks(func, a=[]):
         btn = QPushButton("More")
         btn.setObjectName(x)
         btn.setStyleSheet("color:green")
-        btn.clicked.connect(func)
+        btn.clicked.connect(detailFunc)
         itemHbox.addWidget(btn)
         # itemHbox.setObjectName("Hbox")
         listVBox.addLayout(itemHbox)
@@ -78,9 +86,13 @@ def intraDayLatest(a, p="1d", i="5min"):
     return (yf.download(a, period=p, interval=i)).tail(1)
 
 
-def drawGraph(a):
+def drawGraph(obj, a, hardCoded=None):
     #take valid ticker and provide data from yahoo finance
-    data = yf.download(tickers=a,
+    if hardCoded != None:
+        tickerValue = hardCoded
+    else:
+        tickerValue = getTickerValue(obj, a)
+    data = yf.download(tickers=tickerValue,
                        period='1y',
                        interval='1d',
                        group_by='ticker')
@@ -117,6 +129,7 @@ def drawGraph(a):
 
     # we create an instance of QWebEngineView and set the html code
     plot_widget = QWebEngineView()
+    plot_widget.setObjectName(a)
     plot_widget.setHtml(html)
     return plot_widget
 

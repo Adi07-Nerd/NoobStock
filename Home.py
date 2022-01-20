@@ -21,7 +21,12 @@ class HomeWindow(QWidget):
     def addContent(self):
 
         self.nsegrp = QGroupBox("National Stock Exchange")
-        self.listNse = drawGraph("^NSEI")
+
+        #for testing purpose commented this and BSE also
+        # self.listNse = drawGraph(self,
+        #                          "National Stock Exchange",
+        #                          hardCoded="^NSEI")
+        self.listNse = QLabel("NationalStockExchange")
         labelList = [
             "Open", "Market Cap", "Day Highest", "Close", "Dividend",
             "52 Weeks highest"
@@ -31,7 +36,10 @@ class HomeWindow(QWidget):
         vnse_box.addLayout(createLabels(self, 6, labelList))
 
         self.bsegrp = QGroupBox("Bombay Stock Exchange")
-        self.listBse = drawGraph("HDFC.BO")
+        # self.listBse = drawGraph(self,
+        #                          "Bombay Stock Exchage",
+        #                          hardCoded="^BSESN")
+        self.listBse = QLabel("BombayStockExchange")
         self.labelListBse = QGridLayout()
         for i in range(6):
             if i < 3:
@@ -44,14 +52,16 @@ class HomeWindow(QWidget):
         vbse_box.addLayout(self.labelListBse)
 
         self.gain_lose = QGroupBox("Gainers & Losers")
-        self.fav = ListOfStocks(self.btnClicked, [
-            "Reliance", "TaTa", "WIPRO", "INFOSYS", "Tesla", "TCS", "BLAH",
-            "Blah"
-        ])
-        self.fav1 = ListOfStocks(self.btnClicked, [
-            "Reliance", "TaTa", "WIPRO", "INFOSYS", "Tesla", "TCS", "BLAH",
-            "Blah"
-        ])
+        self.fav = ListOfStocks(self.btnClicked,
+                                a=[
+                                    "Reliance", "TaTa", "WIPRO", "INFOSYS",
+                                    "Tesla", "TCS", "BLAH", "Blah"
+                                ])
+        self.fav1 = ListOfStocks(self.btnClicked,
+                                 a=[
+                                     "Reliance", "TaTa", "WIPRO", "INFOSYS",
+                                     "Tesla", "TCS", "BLAH", "Blah"
+                                 ])
         vlose_gain = QVBoxLayout(self.gain_lose)
         vlose_gain.addStretch(3)
         vlose_gain.addWidget(QLabel("GAINERS"))
@@ -69,7 +79,6 @@ class HomeWindow(QWidget):
         self.setLayout(hbox)
 
     def btnClicked(self, some):
-        print(type(some))
         QMessageBox.information(self, "Btn Action", "I got clicked.",
                                 QMessageBox.StandardButton.Ok,
                                 QMessageBox.StandardButton.Ok)
@@ -89,7 +98,6 @@ class FavoriteWindow(QWidget):
         self.graphDict = {}
         papa.stackNo.setdefault(self.objectName(),
                                 len(papa.stackNo.keys()) + 1)
-        print(papa.stackNo)
 
         self.addContent()
 
@@ -98,7 +106,7 @@ class FavoriteWindow(QWidget):
         self.favLabel = QLabel("Favorites")
         self.vfavBox = QVBoxLayout(self.favbox)
         self.vfavBox.addWidget(self.favLabel)
-        self.fav11 = ListOfStocks(self.btnClick,
+        self.fav11 = ListOfStocks(self.moreBtnClick, self.btnClick,
                                   self.main.userData.info["Favorites"])
         self.vfavBox.addWidget(self.fav11)
 
@@ -106,9 +114,8 @@ class FavoriteWindow(QWidget):
         self.graphStack = QStackedLayout()
         if (self.main.userData.info["Favorites"] != []):
             firstFav = self.main.userData.info["Favorites"][0]
-            graph = drawGraph(getTickerValue(self, firstFav))
+            graph = drawGraph(self, firstFav)
             # graph = QLabel(firstFav)
-            graph.setObjectName(firstFav)
             self.graphDict[firstFav] = 0
         else:
             graph = QLabel("Oops Favorite list is empty")
@@ -130,32 +137,32 @@ class FavoriteWindow(QWidget):
 
         self.setLayout(self.favHbox)
 
-    def btnClick(self, some):
-        sender = self.sender()
+    def moreBtnClick(self):
+        sender = self.sender().objectName()
+        displayMessage(self, "More", sender)
+
+    def btnClick(self):
+        sender = self.sender().objectName()
 
         if (sender not in self.graphDict):
+            self.addGraphObject(sender)
             pass
             #add object by taking following reference
             # self.graphStack.addWidget(drawGraph(sender.objectName()))
 
-        self.stack.setCurrentIndex(
-            self.graphDict.setdefault(sender.objectName())
-        ) if self.graphStack.currentIndex() != (self.graphDict.setdefault(
-            sender.objectName())) else displayMessage(
-                self, "Stop", "You're Already Opened that graph")
-
-        QMessageBox.information(self, "Btn Action",
-                                sender.objectName() + " I got clicked.",
-                                QMessageBox.StandardButton.Ok,
-                                QMessageBox.StandardButton.Ok)
+        self.graphStack.setCurrentIndex(
+            self.isExist(sender)) if self.graphStack.currentIndex() != (
+                self.isExist(sender)) else displayMessage(
+                    self, "Stop", "You're Already Opened that graph")
 
     def addFromSearch(self, text, graph):
+        self.addGraphObject(text, graph)
         layout = (self.fav11.widget()).layout()
         itemHbox = QHBoxLayout()
         lb1 = QPushButton(text)  #stock Name
         lb1.setObjectName(text)
         lb1.setFlat(True)
-        lb1.clicked.connect(lambda: displayMessage(self, "Hey", text))
+        lb1.clicked.connect(self.btnClick)
         lb2 = QLabel(text="CurPrice")  #current day highest
         lb3 = QLabel(text="compare")  #compare to last day closing
         itemHbox.addWidget(lb1)
@@ -164,17 +171,27 @@ class FavoriteWindow(QWidget):
         btn = QPushButton("More")
         btn.setObjectName("More " + text)
         btn.setStyleSheet("color:green")
-        btn.clicked.connect(self.btnClick)
+        btn.clicked.connect(self.moreBtnClick)
         itemHbox.addWidget(btn)
         layout.addLayout(itemHbox)
-        self.graphStack.addWidget(graph)
-        self.graphDict.setdefault(text, len(self.graphDict.keys()))
-        self.graphStack.setCurrentIndex(len(self.graphDict.keys()))
         #alighntment is not proper
 
     def isExist(self, name):
         return self.graphDict.setdefault(
             name) if name in self.graphDict else -1
+
+    def addGraphObject(self, name, graphObject=None):
+        ###
+        # it checks if currently graphObject is avaible and if not than create new graphObject
+        ###
+
+        if graphObject == None:
+            graphObject = drawGraph(self, name)
+
+        self.graphStack.addWidget(graphObject)
+
+        newIndex = len(self.graphDict.keys())
+        self.graphDict.setdefault(name, newIndex)
 
 
 class StockWindow(QWidget):
@@ -204,8 +221,8 @@ class StockWindow(QWidget):
                 "Oops seems like you don't have any purchase stock.")
             self.fav.setWordWrap(True)
         else:
-            self.fav = ListOfStocks(self.btnClicked,
-                                    self.main.userData.info["MyStock"].keys())
+            self.fav = ListOfStocks(
+                self.btnClicked, a=self.main.userData.info["MyStock"].keys())
 
         v_box.addWidget(self.fav)
 
@@ -287,7 +304,7 @@ class SearchEngine(QWidget):
         ####
         self.searchGraph = QGroupBox()
         self.sname = QLabel(stock_name)
-        self.graph = drawGraph(getTickerValue(self, stock_name))
+        self.graph = drawGraph(self, stock_name)
 
         self.names = ["Add To Fav.", "Add To MyStocks", "Back"]
         hboxButton = QHBoxLayout()
@@ -331,7 +348,7 @@ class SearchEngine(QWidget):
         # For later pass info object tool along with graph.
         #####
         if ("Fav" in self.main.stackNo):
-            if (self.sname not in self.main.userData.info["Favorites"]):
+            if (self.sname.text() not in self.main.userData.info["Favorites"]):
                 if (self.main.userData.addToFav(self.sname.text())):
                     displayMessage(
                         self, "Successfull",
@@ -339,7 +356,8 @@ class SearchEngine(QWidget):
                     fav = self.main.stack.widget(self.main.stackNo["Fav"])
                     fav.addFromSearch(self.sname.text(), self.graph)
                 else:
-                    displayMessage(self, "Error", "Oops something went wrong.")
+                    displayMessage(self, "Error",
+                                   "Can't add to favorite list.")
             else:
                 displayMessage(self, "Stop",
                                "You already has this in favorites!!!!")
@@ -391,7 +409,8 @@ class SearchEngine(QWidget):
                 if response == QMessageBox.StandardButton.Ok:
                     self.widget.close()
             else:
-                print("User cancelled")
+                displayMessage(self, "Cancellation",
+                               "Your cancellation completed")
 
         self.widget = QWidget()
         lbl = QLabel(self.sname.text())
