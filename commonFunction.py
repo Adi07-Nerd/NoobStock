@@ -1,31 +1,77 @@
+from tkinter import E
 from unicodedata import name
-from PyQt6.QtWidgets import QGridLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget, QCompleter
+from PyQt6.QtWidgets import QGridLayout, QLabel, QSpinBox, QMessageBox, QPushButton, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget, QSizePolicy
 from PyQt6.QtCore import Qt
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-import plotly.express as px
-from plotly.offline import plot
 import yfinance as yf
 import pickle
+import datetime as dt
+import pyqtgraph as pg
+
+pg.setConfigOption("background", "w")
+pg.setConfigOption('foreground', 'k')
+
+import pandas as pd
+
+from Worker_Slot_Runnable import Worker
 
 
-def tickerlist():
-    # providing dicitonary of valid tickers and model for auto completor
-    with open(
-            "C:/Users/shyam/Documents/aditya/Project/Programs/NoobStock/tickerlist.txt",
-            "rb") as file:
-        data = file.read()
-        data = pickle.loads(data)
-        # print(data)
-        file.close()
-        words = []
-        for i, j in data.items():
-            for a in j:
-                #spliting and finding who belongs to which exchanges
-                if (a.split(".")[1] == "NS"):
-                    words.append(i + " " + "(NSE)")
-                else:
-                    words.append(i + " " + "(BSE)")
-        return data, words
+class TimeAxisItem(pg.AxisItem):
+    def tickStrings(self, values, scale, spacing):
+        return [
+            dt.datetime.fromtimestamp(value).strftime("%Y-%m-%d")
+            for value in values
+        ]
+
+
+def graphWindow(obj):
+    try:
+        graphWin = QWidget()
+        graphWin.setObjectName("graphWindow")
+        graphWin.setMinimumSize(300, 300)
+
+        sp = QSpinBox()
+        sp.setRange(1, 3)
+        sp.setSuffix(" Min")
+        sp.valueChanged.connect(
+            lambda x=sp.value(): obj.onIntervalChange(str(x)))
+
+        hbox = createButtons(func=obj.onDayChange,
+                             names=["1 Day", "1 Month", "1 Year"])
+
+        hbox.insertWidget(0, sp)
+        graphWin.setSizePolicy(QSizePolicy.Policy.Maximum,
+                               QSizePolicy.Policy.Preferred)
+        vbox = QVBoxLayout()
+        dataaxis = TimeAxisItem(orientation="bottom")
+        graphWidget = pg.PlotWidget(axisItems={"bottom": dataaxis})
+        vbox.addLayout(hbox)
+        vbox.addWidget(graphWidget)
+        graphWin.setLayout(vbox)
+    except Exception as e:
+        print(str(e))
+    return graphWin
+
+
+def getStockItem(graphWindow, x_date, y_value, name):
+    ###
+    #
+    ##
+    try:
+        ##to do get the current ploted line remove that line add new item
+        graphObject = (graphWindow.layout()).itemAt(1).widget()
+        graphObject.setTitle(name, size="15pt")
+        pen = pg.mkPen(color=(255, 0, 0))
+        return graphObject.plot(x_date, y_value, pen=pen, clear=True)
+
+    except Exception as e:
+        print(str(e))
+
+
+def threadSafeData(obj, a, hardCoded=None):
+    worker = Worker(obj, a, hardCoded)
+    worker.signals.finished.connect(obj.onComplete)
+    worker.signals.error.connect(obj.onError)
+    obj.threadpool.start(worker)
 
 
 def searchCombo(obj, slayout):
@@ -45,6 +91,7 @@ def ListOfStocks(detailFunc, showGraph=None, a=[]):
     scrollarea = QScrollArea()
     scrollw = QWidget()
     listVBox = QVBoxLayout(scrollw)
+    listVBox.setAlignment(Qt.AlignmentFlag.AlignCenter)
     for x in a:
         ##showing bool object has no attribut like split in stockname
         itemHbox = QHBoxLayout()
@@ -70,7 +117,10 @@ def ListOfStocks(detailFunc, showGraph=None, a=[]):
         listVBox.setSpacing(2)
         listVBox.setObjectName("listvbox")
     scrollarea.setWidget(scrollw)
+    scrollarea.setStyleSheet("border:2px")
     scrollarea.setMaximumSize(300, 300)
+    scrollarea.setSizePolicy(QSizePolicy.Policy.Preferred,
+                             QSizePolicy.Policy.Maximum)
     scrollarea.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
     return scrollarea
 
@@ -84,54 +134,6 @@ def intraDayFirst(a, p="1d", i="5min"):
 def intraDayLatest(a, p="1d", i="5min"):
     #to retrieve las updated value
     return (yf.download(a, period=p, interval=i)).tail(1)
-
-
-def drawGraph(obj, a, hardCoded=None):
-    #take valid ticker and provide data from yahoo finance
-    if hardCoded != None:
-        tickerValue = hardCoded
-    else:
-        tickerValue = getTickerValue(obj, a)
-    data = yf.download(tickers=tickerValue,
-                       period='1y',
-                       interval='1d',
-                       group_by='ticker')
-    close_data = data[['Close']]
-
-    c_area = px.area(close_data, title=a + ' CLOSE PRICE')
-    c_area.update_xaxes(
-        title_text='Date',
-        rangeslider_visible=True,
-        rangeselector=dict(buttons=list([
-            dict(count=1, label='1M', step='month', stepmode='backward'),
-            dict(count=6, label='6M', step='month', stepmode='backward'),
-            dict(count=1, label='YTD', step='year', stepmode='todate'),
-            dict(count=1, label='1Y', step='year', stepmode='backward'),
-            dict(step='all')
-        ])))
-
-    c_area.update_yaxes(title_text=a + 'Close Price', tickprefix='\u20B9')
-    c_area.update_layout(showlegend=False,
-                         title={
-                             'text': a + ' CLOSE PRICE',
-                             'y': 0.9,
-                             'x': 0.5,
-                             'xanchor': 'center',
-                             'yanchor': 'top'
-                         })
-
-    # html = '<html><body>'
-    html = plot(c_area,
-                output_type='div',
-                include_plotlyjs='cdn',
-                config={'displayModeBar': False})
-    # html += '</body></html>'
-
-    # we create an instance of QWebEngineView and set the html code
-    plot_widget = QWebEngineView()
-    plot_widget.setObjectName(a)
-    plot_widget.setHtml(html)
-    return plot_widget
 
 
 def createLabels(obj, number, names=[]):
@@ -153,11 +155,14 @@ def createLabels(obj, number, names=[]):
     return searchListItems
 
 
-def createButtons(obj, number, func, names=[]):
+def createButtons(func, names=[]):
+    ###
+    # make sure lambda have first variable as checked because it takes check value.
+    ###
     hbox = QHBoxLayout()
     for i in range(len(names)):
         buttons = QPushButton(names[i])
-        buttons.clicked.connect(lambda text=names[i]: func(text))
+        buttons.clicked.connect(lambda checked, text=names[i]: func(text))
         hbox.addWidget(buttons)
     return hbox
 
@@ -166,17 +171,3 @@ def displayMessage(obj, title, message):
     return QMessageBox.information(obj, title, message,
                                    QMessageBox.StandardButton.Ok,
                                    QMessageBox.StandardButton.Ok)
-
-
-def getTickerValue(obj, stock):
-    ############
-    # make sure your main HomeWindow object is store in main only
-    # This function takes search text and result its ticker to search from yahoo finance
-    ######
-    splited = stock.split(" ")
-    name = " ".join(splited[:-1])
-    options = obj.main.tickers[name]
-    if (len(options) > 1):
-        return "".join(options[0] if splited[-1] == "(NSE)" else options[1])
-    else:
-        return "".join(options)

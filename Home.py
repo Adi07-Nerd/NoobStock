@@ -1,8 +1,6 @@
-from os import close
-from PyQt6.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QWindow
-from PyQt6.QtWidgets import QBoxLayout, QGridLayout, QGroupBox, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QStackedLayout, QPushButton, QScrollArea, QScrollBar, QSizePolicy, QSpinBox, QWidget, QVBoxLayout, QLabel, QWidgetItem
-from commonFunction import searchCombo, ListOfStocks, drawGraph, createLabels, displayMessage, getTickerValue, intraDayLatest
+from PyQt6.QtCore import Qt, QThreadPool
+from PyQt6.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QMessageBox, QPushButton, QSizePolicy, QSpinBox, QWidget, QVBoxLayout, QLabel
+from commonFunction import graphWindow, threadSafeData, ListOfStocks, getStockItem, createLabels, displayMessage, intraDayLatest
 
 
 class HomeWindow(QWidget):
@@ -11,22 +9,30 @@ class HomeWindow(QWidget):
         # 1. setCurrent object name
         # 2. storing instance of main class
         # 3. Adding object name along with index into dictionary for identification purpose
+        # 4 make sure addContent is on last line otherwise there could be undefined variable error
         ####
         super().__init__()
         self.setObjectName("Home")
         self.main = papa
         self.labels = []
+        self.threadpool = QThreadPool()
+
         self.addContent()
 
     def addContent(self):
 
-        self.nsegrp = QGroupBox("National Stock Exchange")
+        self.nsegrp = QGroupBox()
+        self.nsegrp.setSizePolicy(QSizePolicy.Policy.Minimum,
+                                  QSizePolicy.Policy.Minimum)
 
         #for testing purpose commented this and BSE also
         # self.listNse = drawGraph(self,
         #                          "National Stock Exchange",
         #                          hardCoded="^NSEI")
-        self.listNse = QLabel("NationalStockExchange")
+
+        self.listNse = QLabel("NationalStockExchange loading...")
+        threadSafeData(self, "National Stock Exchange", "^NSEI")
+        self.graph_line_Nse = None
         labelList = [
             "Open", "Market Cap", "Day Highest", "Close", "Dividend",
             "52 Weeks highest"
@@ -35,7 +41,10 @@ class HomeWindow(QWidget):
         vnse_box.addWidget(self.listNse)
         vnse_box.addLayout(createLabels(self, 6, labelList))
 
-        self.bsegrp = QGroupBox("Bombay Stock Exchange")
+        self.bsegrp = QGroupBox()
+        self.bsegrp.setSizePolicy(QSizePolicy.Policy.Minimum,
+                                  QSizePolicy.Policy.Minimum)
+
         # self.listBse = drawGraph(self,
         #                          "Bombay Stock Exchage",
         #                          hardCoded="^BSESN")
@@ -51,7 +60,12 @@ class HomeWindow(QWidget):
         vbse_box.addWidget(self.listBse)
         vbse_box.addLayout(self.labelListBse)
 
-        self.gain_lose = QGroupBox("Gainers & Losers")
+        #LoseandProfit
+        self.gain_lose = QGroupBox()
+        self.gain_lose.setSizePolicy(QSizePolicy.Policy.Minimum,
+                                     QSizePolicy.Policy.Minimum)
+
+        self.gain_lose.setFlat(True)  #this will make disappear the box
         self.fav = ListOfStocks(self.btnClicked,
                                 a=[
                                     "Reliance", "TaTa", "WIPRO", "INFOSYS",
@@ -62,26 +76,57 @@ class HomeWindow(QWidget):
                                      "Reliance", "TaTa", "WIPRO", "INFOSYS",
                                      "Tesla", "TCS", "BLAH", "Blah"
                                  ])
+
+        #check how to make scroll bar side thing invisible
         vlose_gain = QVBoxLayout(self.gain_lose)
-        vlose_gain.addStretch(3)
-        vlose_gain.addWidget(QLabel("GAINERS"))
-        vlose_gain.addWidget(self.fav1)
-        vlose_gain.addStretch(1)
-        vlose_gain.addWidget(QLabel("Losers"))
-        vlose_gain.addWidget(self.fav)
-        vlose_gain.addStretch(3)
+        v1 = QVBoxLayout()
+        v1.addStretch(3)
+        g = QLabel("GAINERS")
+        g.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        v1.addWidget(g)
+        v1.addWidget(self.fav1)
+        v1.addStretch(1)
+        b = QLabel("Losers")
+        b.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        v1.addWidget(b)
+        v1.addWidget(self.fav)
+        v1.addStretch(3)
+        vlose_gain.addLayout(v1, Qt.AlignmentFlag.AlignVCenter)
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.nsegrp)
         hbox.addWidget(self.bsegrp)
-        hbox.addWidget(self.gain_lose)
+        hbox.addWidget(self.gain_lose, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.setLayout(hbox)
+
+    def onIntervalChange(self, text):
+        displayMessage(self, text, "I got changed")
+
+    def onDayChange(self, text):
+        displayMessage(self, text, "I got clicked.")
 
     def btnClicked(self, some):
         QMessageBox.information(self, "Btn Action", "I got clicked.",
                                 QMessageBox.StandardButton.Ok,
                                 QMessageBox.StandardButton.Ok)
+
+    def onError(self, text):
+        self.listNse.setText(text)
+
+    def onComplete(self, result):
+        ###
+        # First if will add graphwindow object when there is no graph widget existing
+        ###
+        if (self.listNse.objectName != "graphWindow"):
+            layout = self.nsegrp.layout()
+            layout.removeWidget(self.listNse)
+            self.listNse.deleteLater()
+            self.listNse = graphWindow(self)
+            layout.insertWidget(0, self.listNse)
+
+        self.graph_line_Nse = getStockItem(self.listNse, result[0][0],
+                                           result[0][1], result[1])
 
 
 class FavoriteWindow(QWidget):
@@ -96,46 +141,104 @@ class FavoriteWindow(QWidget):
         self.main = papa
         self.labels = []
         self.graphDict = {}
+        self.threadpool = QThreadPool()
         papa.stackNo.setdefault(self.objectName(),
                                 len(papa.stackNo.keys()) + 1)
 
         self.addContent()
 
     def addContent(self):
-        self.favbox = QGroupBox("Favorite List")
+        #groupbox alignment its not working.
+        #favoriteListgroup
+        self.favbox = QGroupBox()
+        # self.favbox.setStyleSheet("border:0px")
+        self.favbox.setSizePolicy(QSizePolicy.Policy.Preferred,
+                                  QSizePolicy.Policy.Preferred)
+        #this make a vertical line visible on top of box
+        # self.favbox.setFlat(True)
         self.favLabel = QLabel("Favorites")
+        # self.favLabel.setAlignment(Qt.AlignmentFlag.AlignBottom)
+
+        #for Label and Scroll Widget
         self.vfavBox = QVBoxLayout(self.favbox)
+        self.vfavBox.addStretch(1)
         self.vfavBox.addWidget(self.favLabel)
         self.fav11 = ListOfStocks(self.moreBtnClick, self.btnClick,
                                   self.main.userData.info["Favorites"])
+        # self.fav11.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.vfavBox.addSpacing(2)
         self.vfavBox.addWidget(self.fav11)
+        self.vfavBox.addStretch(1)
 
         self.favGrap = QGroupBox()
-        self.graphStack = QStackedLayout()
+        self.favGrap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.favGrap.setStyleSheet("border:0px")
+        self.favGrap.setSizePolicy(QSizePolicy.Policy.Maximum,
+                                   QSizePolicy.Policy.Maximum)
+
         if (self.main.userData.info["Favorites"] != []):
             firstFav = self.main.userData.info["Favorites"][0]
-            graph = drawGraph(self, firstFav)
-            # graph = QLabel(firstFav)
-            self.graphDict[firstFav] = 0
+            # graph = drawGraph(self, firstFav)
+            self.graphContainer = QLabel(firstFav + "Loading")
+            self.current_graphLine = None
+            threadSafeData(self, firstFav)
         else:
-            graph = QLabel("Oops Favorite list is empty")
-
-        self.graphStack.insertWidget(0, graph)
+            self.graphContainer = QLabel("Oops Favorite list is empty")
 
         labelList = [
             "Open", "Market Cap", "Day Highest", "Close", "Dividend",
             "52 Weeks highest"
         ]
         v_box = QVBoxLayout(self.favGrap)
-        v_box.addLayout(self.graphStack)
+        v_box.addWidget(self.graphContainer)
+        v_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v_box.addSpacing(12)
         v_box.addLayout(createLabels(self, 6, labelList))
+        v_box.addStretch(0)
 
         self.favHbox = QHBoxLayout()
+        self.favHbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.favHbox.addStretch(1)
         self.favHbox.addWidget(self.favbox)
-        self.favHbox.addStretch(3)
+        self.favHbox.addSpacing(10)
         self.favHbox.addWidget(self.favGrap)
+        self.favHbox.addStretch(1)
 
         self.setLayout(self.favHbox)
+
+    def onIntervalChange(self, text):
+        displayMessage(self, text, "I got changed")
+
+    def onDayChange(self, text):
+        displayMessage(self, text, "I got clicked.")
+
+    def onError(self, text):
+        # set error text on label
+        self.graphContainer.setText(text)
+
+    def onComplete(self, result):
+        #####
+        # layout store the layout of favGrap
+        # than we remove the label from layout after getting data
+        # than we call stockGraph to plot
+        # add the graph_line object to the dictionary
+        ##
+        if self.graphContainer.objectName() != "graphWindow":
+            layout = self.favGrap.layout()
+            layout.removeWidget(self.graphContainer)
+            self.graphContainer.deleteLater()
+            self.graphContainer = graphWindow(self)
+            layout.insertWidget(1, self.graphContainer)
+
+        plot_widget = self.graphContainer.layout().widget()
+        if (self.current_graphLine != None):
+            #remove the widget
+            plot_widget.removeItem(self.current_graphLine)
+
+        self.current_graphLine = getStockItem(plot_widget, result[0][0],
+                                              result[0][1], result[1])
+
+        self.graphDict[result[1]] = self.current_graphLine
 
     def moreBtnClick(self):
         sender = self.sender().objectName()
@@ -186,12 +289,13 @@ class FavoriteWindow(QWidget):
         ###
 
         if graphObject == None:
-            graphObject = drawGraph(self, name)
-
-        self.graphStack.addWidget(graphObject)
-
-        newIndex = len(self.graphDict.keys())
-        self.graphDict.setdefault(name, newIndex)
+            threadSafeData(self, name)
+        else:
+            plot_widget = self.graphContainer.layout().widget()
+            plot_widget.removeItem(self.current_graphLine)
+            self.current_graphLine = graphObject
+            self.graphDict[name] = self.current_graphLine
+            plot_widget.addItem(self.current_graphLine)
 
 
 class StockWindow(QWidget):
@@ -213,8 +317,9 @@ class StockWindow(QWidget):
         #main Content
         self.purchase = QGroupBox()
         self.list = QLabel("Purchased Stock")
+        self.list.setAlignment(Qt.AlignmentFlag.AlignLeft)
         v_box = QVBoxLayout(self.purchase)
-        v_box.addWidget(self.list)
+        v_box.addWidget(self.list, Qt.AlignmentFlag.AlignBottom)
 
         if self.main.userData.info["MyStock"] == []:
             self.fav = QLabel(
@@ -223,8 +328,9 @@ class StockWindow(QWidget):
         else:
             self.fav = ListOfStocks(
                 self.btnClicked, a=self.main.userData.info["MyStock"].keys())
-
-        v_box.addWidget(self.fav)
+        self.fav.setAlignment(Qt.AlignmentFlag.AlignTop)
+        v_box.addWidget(self.fav, Qt.AlignmentFlag.AlignLeft)
+        v_box.addStretch(1)
 
         self.userDetails = QGroupBox("User Details")
         self.name = QLabel("Aditya")
@@ -237,11 +343,21 @@ class StockWindow(QWidget):
         v1_box = QVBoxLayout(self.userDetails)
         v1_box.addWidget(self.name)
         v1_box.addLayout(createLabels(self, 6, labelList))
+        v1_box.addStretch(0)
 
         hbox = QHBoxLayout()
+        hbox.addStretch(0)
         hbox.addWidget(self.purchase)
+        hbox.addSpacing(10)
         hbox.addWidget(self.userDetails)
+        hbox.addStretch(0)
         self.setLayout(hbox)
+
+    def onIntervalChange(self, text):
+        displayMessage(self, text, "I got changed")
+
+    def onDayChange(self, text):
+        displayMessage(self, text, "I got clicked.")
 
     def btnClicked(self):
         sender = self.sender()
@@ -304,7 +420,10 @@ class SearchEngine(QWidget):
         ####
         self.searchGraph = QGroupBox()
         self.sname = QLabel(stock_name)
-        self.graph = drawGraph(self, stock_name)
+        self.graphContainer = QLabel(stock_name + "Loading")
+        self.current_graphLine = None
+        threadSafeData(self, stock_name)
+        # self.graph = drawGraph(self, stock_name)
 
         self.names = ["Add To Fav.", "Add To MyStocks", "Back"]
         hboxButton = QHBoxLayout()
@@ -338,6 +457,37 @@ class SearchEngine(QWidget):
         self.hAll.addWidget(self.searchData)
         self.setLayout(self.hAll)
 
+    def onIntervalChange(self, text):
+        displayMessage(self, text, "I got changed")
+
+    def onDayChange(self, text):
+        displayMessage(self, text, "I got clicked.")
+
+    def error(self, text):
+        self.graphContainer.setText(text)
+
+    def onComplete(self, result):
+        #####
+        # layout store the layout of favGrap
+        # than we remove the label from layout after getting data
+        # than we call stockGraph to plot
+        # add the graph_line object to the dictionary
+        ##
+        if self.graphContainer.objectName() != "graphWindow":
+            layout = self.favGrap.layout()
+            layout.removeWidget(self.graphContainer)
+            self.graphContainer.deleteLater()
+            self.graphContainer = graphWindow(self)
+            layout.insertWidget(1, self.graphContainer)
+
+        plot_widget = self.graphContainer.layout().widget()
+        if (self.current_graphLine != None):
+            #remove the widget
+            plot_widget.removeItem(self.current_graphLine)
+
+        self.current_graphLine = getStockItem(plot_widget, result[0][0],
+                                              result[0][1], result[1])
+
     def updateUi(self, message):
         #reimpletment the above thing
         self.sname.setText(message)
@@ -354,7 +504,8 @@ class SearchEngine(QWidget):
                         self, "Successfull",
                         self.sname.text() + " Stock Added in favorite.")
                     fav = self.main.stack.widget(self.main.stackNo["Fav"])
-                    fav.addFromSearch(self.sname.text(), self.graph)
+                    fav.addFromSearch(self.sname.text(),
+                                      self.current_graphLine)
                 else:
                     displayMessage(self, "Error",
                                    "Can't add to favorite list.")
@@ -384,7 +535,8 @@ class SearchEngine(QWidget):
         #################
         # Remember to restict the main window to interact you have to put modality before show.
         ############
-        closeValue = (intraDayLatest(getTickerValue(self, self.sname.text()),
+        closeValue = (intraDayLatest(self.main.data_provider.getTickerValue(
+            self, self.sname.text()),
                                      i="1m")).tail(1)["Close"]
         closeValue = round([x for x in closeValue.iteritems()][0][1], 2)
 

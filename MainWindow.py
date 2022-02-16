@@ -1,7 +1,8 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QCompleter, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QStackedLayout, QPushButton, QVBoxLayout, QWidget
 from Home import HomeWindow, FavoriteWindow, StockWindow, UserWindow, SearchEngine
-from commonFunction import tickerlist, displayMessage
+from DataProvider import DataProvider
+from commonFunction import displayMessage
 
 
 class Main_Window(QWidget):
@@ -14,7 +15,8 @@ class Main_Window(QWidget):
         # userData will be used to store user class instance.
         #######
         super().__init__()
-        self.tickers, self.tickerModel = tickerlist()
+        self.data_provider = DataProvider()
+        # self.tickers, self.tickerModel = tickerlist() instead of this use self.data_provider.tickers and self.data_provider.tickerModel
         self.stackNo = {}
         self.userData = user
         self.initializeUi()
@@ -58,17 +60,25 @@ class Main_Window(QWidget):
 
         #creating stack layout
         self.stack = QStackedLayout()
+        #Check out meaning for this.
+        # self.stack.setSizeConstraint()
+        self.stack.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.display = HomeWindow(self)
         self.display.setWindowTitle("Hey annoying")
         self.stack.addWidget(self.display)
 
+        ##For adding Stack Widget At center
+        HStackBox = QHBoxLayout()
+        HStackBox.addStretch(0)
+        HStackBox.addLayout(self.stack)
+        HStackBox.addStretch(0)
         #combining topbar and stack widget
         self.vbox = QVBoxLayout()
         self.vbox.addLayout(self.hbox)
         self.vbox.addWidget(self.searchbox)
-        self.vbox.addLayout(self.stack)
+        self.vbox.addLayout(HStackBox)
         self.vbox.setSpacing(0)
-        self.vbox.alignment = Qt.AlignmentFlag.AlignLeft
+        self.vbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.setLayout(self.vbox)
 
@@ -152,7 +162,7 @@ class Main_Window(QWidget):
 
     def createSearch(self):
         widget = QWidget()
-        auto_complete = QCompleter(self.tickerModel)
+        auto_complete = QCompleter(self.data_provider.tickerModel)
         auto_complete.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         search = QLineEdit()
         search.setPlaceholderText("Enter Stock Name")
